@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "cpu-llm-lab"
+version = "0.1.0"
+description = "CPU-only benchmark and text formatting lab for small Ollama models"
+authors = ["Fidel <dev@example.invalid>"]
+readme = "README.md"
+packages = [{ include = "cpu_llm_lab", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.116.1"
+uvicorn = {extras = ["standard"], version = "^0.35.0"}
+httpx = "^0.28.1"
+pydantic = "^2.11.7"
+psutil = "^7.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+
+[tool.poetry.scripts]
+cpu-llm-lab = "cpu_llm_lab.app:run"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

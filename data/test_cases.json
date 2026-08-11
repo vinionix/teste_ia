@@ -1,0 +1,57 @@
+[
+  {
+    "id": "pending_basic",
+    "record": {
+      "cliente": "João Silva",
+      "plano": "Premium",
+      "valor": 149.90,
+      "status": "pagamento_pendente",
+      "vencimento": "15/08/2026"
+    },
+    "expected_category": "financeiro"
+  },
+  {
+    "id": "pending_small_value",
+    "record": {
+      "cliente": "Mariana Costa",
+      "plano": "Essencial",
+      "valor": 39.90,
+      "status": "pagamento_pendente",
+      "vencimento": "20/08/2026"
+    },
+    "expected_category": "financeiro"
+  },
+  {
+    "id": "paid",
+    "record": {
+      "cliente": "Carlos Souza",
+      "plano": "Pro",
+      "valor": 89.00,
+      "status": "pagamento_confirmado",
+      "vencimento": "05/08/2026"
+    },
+    "expected_category": "informativo"
+  },
+  {
+    "id": "support",
+    "record": {
+      "cliente": "Ana Pereira",
+      "plano": "Premium",
+      "valor": 149.90,
+      "status": "suporte_solicitado",
+      "vencimento": "25/08/2026"
+    },
+    "expected_category": "suporte"
+  },
+  {
+    "id": "high_value",
+    "record": {
+      "cliente": "Empresa Aurora Ltda",
+      "plano": "Enterprise",
+      "valor": 1299.50,
+      "status": "pagamento_pendente",
+      "vencimento": "31/08/2026"
+    },
+    "expected_category": "financeiro"
+  }
+]
