@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from .benchmark import run_benchmark
@@ -82,7 +82,10 @@ async def query(payload: QueryRequest):
 
 
 @app.post("/api/benchmark", response_model=BenchmarkResponse)
-async def benchmark(models: list[str] | None = None, top_k: int = 3):
+async def benchmark(
+    models: list[str] | None = Query(default=None),
+    top_k: int = Query(default=3, ge=1, le=10),
+):
     ollama = get_client()
     if not await ollama.health():
         raise HTTPException(status_code=503, detail="Ollama não está acessível em localhost:11434.")
@@ -101,7 +104,7 @@ async def benchmark(models: list[str] | None = None, top_k: int = 3):
         selected,
         CASES_PATH,
         DATABASE_PATH,
-        top_k=max(1, min(top_k, 10)),
+        top_k=top_k,
     )
 
 
