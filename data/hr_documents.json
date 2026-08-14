@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "title": "Política de Férias e Descanso",
+    "category": "ferias",
+    "content": "Documento fictício da Aurora Labs para benchmark. O pedido de férias deve ser aberto no Portal de Pessoas com pelo menos 30 dias corridos de antecedência. Antes de enviar, o funcionário deve alinhar as datas com a liderança direta e indicar um responsável temporário pelas atividades críticas. As férias podem ser divididas em até 3 períodos, desde que um deles tenha pelo menos 14 dias corridos e os demais tenham pelo menos 5 dias corridos cada. É permitido solicitar a conversão de até 10 dias de férias em abono, desde que o pedido seja feito junto com a solicitação principal. Depois da aprovação da liderança, o RH confirma o período por e-mail. Alterações após aprovação devem ser solicitadas ao RH e dependem de nova validação da liderança."
+  },
+  {
+    "id": 2,
+    "title": "Guia Geral de Benefícios",
+    "category": "beneficios",
+    "content": "Documento fictício da Aurora Labs para benchmark. Funcionários elegíveis recebem vale-refeição de R$ 42,00 por dia útil, vale-alimentação mensal de R$ 650,00, plano de saúde sem mensalidade para o titular, plano odontológico, seguro de vida, auxílio home office de R$ 180,00 por mês e acesso ao programa de bem-estar Aurora Vida. Dependentes podem ser incluídos no plano de saúde com coparticipação conforme a faixa cadastrada no Portal de Pessoas. Os benefícios são liberados após a conclusão da admissão e podem ter regras específicas descritas em documentos complementares."
+  },
+  {
+    "id": 3,
+    "title": "Plano de Saúde e Odontológico",
+    "category": "saude",
+    "content": "Documento fictício da Aurora Labs para benchmark. O plano de saúde possui cobertura nacional e não cobra mensalidade do titular. Consultas e exames simples possuem coparticipação de 20%, limitada a R$ 120,00 por procedimento. Dependentes podem ser adicionados até o dia 20 de cada mês para vigência no mês seguinte. O plano odontológico cobre consultas preventivas, limpeza, restaurações simples e urgências. Solicitações de inclusão ou exclusão devem ser feitas no Portal de Pessoas, menu Benefícios > Saúde."
+  },
+  {
+    "id": 4,
+    "title": "Trabalho Híbrido e Auxílio Home Office",
+    "category": "trabalho_hibrido",
+    "content": "Documento fictício da Aurora Labs para benchmark. O regime padrão permite até 3 dias de trabalho remoto por semana, conforme acordo com a liderança e necessidades do time. O auxílio home office é de R$ 180,00 mensais e é creditado junto com a folha. A empresa fornece notebook corporativo e, mediante aprovação, um monitor externo. Despesas particulares de internet não são reembolsadas além do auxílio mensal. Em dias presenciais, o funcionário deve utilizar o escritório definido para sua equipe."
+  },
+  {
+    "id": 5,
+    "title": "Programa de Educação e Certificações",
+    "category": "educacao",
+    "content": "Documento fictício da Aurora Labs para benchmark. Cada funcionário possui orçamento anual de até R$ 2.400,00 para cursos, livros técnicos e certificações relacionados ao seu plano de desenvolvimento. Gastos acima de R$ 600,00 por item exigem aprovação prévia da liderança. A solicitação deve ser registrada antes da compra no Portal de Pessoas. Após aprovação, o reembolso é realizado mediante nota fiscal e comprovante de pagamento. Certificações obrigatórias solicitadas pela empresa não consomem o orçamento individual."
+  },
+  {
+    "id": 6,
+    "title": "Programa Aurora Vida",
+    "category": "bem_estar",
+    "content": "Documento fictício da Aurora Labs para benchmark. O Aurora Vida oferece 4 sessões de psicoterapia por mês em plataforma parceira, acesso a academias da rede conveniada e uma folga de bem-estar por trimestre. A folga deve ser combinada com a liderança com pelo menos 5 dias úteis de antecedência e não acumula entre trimestres. O programa também disponibiliza orientação financeira online uma vez por mês."
+  },
+  {
+    "id": 7,
+    "title": "Reembolso de Viagens e Despesas",
+    "category": "reembolso",
+    "content": "Documento fictício da Aurora Labs para benchmark. Despesas corporativas devem ser registradas no sistema financeiro em até 10 dias corridos após o gasto. Refeições em viagem têm limite de R$ 95,00 por dia. Transporte por aplicativo pode ser reembolsado quando relacionado a atividade corporativa e acompanhado de comprovante. Hospedagens devem respeitar o teto de R$ 480,00 por diária, salvo exceção aprovada antes da viagem. Reembolsos aprovados até o dia 15 são pagos na folha do mesmo mês; os demais seguem para a folha seguinte."
+  },
+  {
+    "id": 8,
+    "title": "Licenças Familiares e Apoio a Cuidadores",
+    "category": "licencas",
+    "content": "Documento fictício da Aurora Labs para benchmark. Além das licenças legais aplicáveis, a política interna concede 20 dias corridos de licença parental complementar ao responsável não gestante e 30 dias corridos adicionais de licença complementar à pessoa gestante. O benefício interno deve ser solicitado ao RH com a documentação indicada no Portal de Pessoas. Funcionários responsáveis por familiar em tratamento prolongado podem solicitar até 2 dias de trabalho remoto adicional por mês, mediante acordo com a liderança."
+  },
+  {
+    "id": 9,
+    "title": "Mobilidade, Vale-Transporte e Estacionamento",
+    "category": "mobilidade",
+    "content": "Documento fictício da Aurora Labs para benchmark. O vale-transporte pode ser solicitado ou alterado até o dia 12 de cada mês para vigência no mês seguinte. Funcionários que utilizam veículo próprio podem solicitar acesso ao estacionamento, sujeito à disponibilidade, mas não acumulam estacionamento subsidiado e vale-transporte no mesmo período. Bicicletário e vestiário são gratuitos para todos os funcionários do escritório principal."
+  },
+  {
+    "id": 10,
+    "title": "Segurança da Informação para Funcionários",
+    "category": "seguranca",
+    "content": "Documento fictício da Aurora Labs para benchmark. Senhas corporativas não devem ser compartilhadas, e o acesso aos sistemas deve utilizar autenticação multifator quando disponível. Documentos internos não podem ser enviados para contas pessoais ou ferramentas externas não aprovadas. Incidentes, perda de equipamento ou suspeita de phishing devem ser comunicados imediatamente ao canal interno de Segurança. O notebook corporativo deve permanecer com criptografia e bloqueio automático habilitados."
+  }
+]

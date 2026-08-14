@@ -1,80 +1,58 @@
 import re
-from datetime import datetime
+import unicodedata
 
-from .schemas import Evaluation, FormattedText, SourceRecord
+from .schemas import GroundedAnswer, QueryEvaluation, RetrievedDocument, TestCase
 
 
 def _normalized(text: str) -> str:
-    return re.sub(r"\s+", " ", text.lower()).strip()
+    text = unicodedata.normalize("NFKD", text.lower())
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", text).strip()
 
 
-def _amount_variants(value: float) -> set[str]:
-    fixed = f"{value:.2f}"
-    integer = str(int(value)) if value.is_integer() else ""
-    variants = {
-        fixed,
-        fixed.replace(".", ","),
-        f"r$ {fixed}",
-        f"r${fixed}",
-        f"r$ {fixed.replace('.', ',')}",
-        f"r${fixed.replace('.', ',')}",
-    }
-    if integer:
-        variants.add(integer)
-        variants.add(f"r$ {integer}")
-    return {_normalized(v) for v in variants if v}
+def evaluate_query(
+    case: TestCase,
+    answer: GroundedAnswer,
+    retrieved_documents: list[RetrievedDocument],
+) -> QueryEvaluation:
+    normalized_answer = _normalized(answer.resposta)
+    retrieved_ids = {document.id for document in retrieved_documents}
+    expected_ids = set(case.expected_document_ids)
 
+    retrieval_hit = expected_ids.issubset(retrieved_ids) if expected_ids else True
+    preserved = sum(
+        1 for fact in case.required_facts if _normalized(fact) in normalized_answer
+    )
+    total = len(case.required_facts)
+    factual_score = round((preserved / total) * 100, 2) if total else 100.0
 
-def _date_variants(date_text: str) -> set[str]:
-    variants = {date_text}
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
-        try:
-            parsed = datetime.strptime(date_text, fmt)
-            variants.update(
-                {
-                    parsed.strftime("%d/%m/%Y"),
-                    parsed.strftime("%d-%m-%Y"),
-                    parsed.strftime("%Y-%m-%d"),
-                }
-            )
-            break
-        except ValueError:
-            continue
-    return {_normalized(v) for v in variants}
-
-
-def evaluate_output(
-    source: SourceRecord,
-    output: FormattedText,
-    expected_category: str | None = None,
-) -> Evaluation:
-    combined = _normalized(f"{output.titulo} {output.mensagem} {output.categoria}")
-    name_ok = _normalized(source.cliente) in combined
-    amount_ok = any(v in combined for v in _amount_variants(source.valor))
-    date_ok = any(v in combined for v in _date_variants(source.vencimento))
-    category_ok = None if expected_category is None else output.categoria == expected_category
-
-    checks = [name_ok, amount_ok, date_ok]
-    if category_ok is not None:
-        checks.append(category_ok)
+    cited_ids = set(answer.fontes)
+    source_accuracy = bool(expected_ids & cited_ids) if case.should_answer and expected_ids else None
+    forbidden_found = [
+        fact for fact in case.forbidden_facts if _normalized(fact) in normalized_answer
+    ]
+    hallucination_free = not forbidden_found
+    abstention_ok = answer.encontrado == case.should_answer
 
     notes: list[str] = []
-    if not name_ok:
-        notes.append("Nome do cliente não foi preservado.")
-    if not amount_ok:
-        notes.append("Valor não foi preservado de forma reconhecível.")
-    if not date_ok:
-        notes.append("Data de vencimento não foi preservada.")
-    if category_ok is False:
-        notes.append("Categoria diferente da esperada.")
+    if not retrieval_hit:
+        notes.append("O recuperador não trouxe todos os documentos esperados.")
+    if preserved < total:
+        notes.append(f"Preservou {preserved}/{total} fatos obrigatórios.")
+    if source_accuracy is False:
+        notes.append("A resposta não citou uma das fontes esperadas.")
+    if forbidden_found:
+        notes.append("Incluiu informação proibida/alterada: " + ", ".join(forbidden_found))
+    if not abstention_ok:
+        notes.append("Errou ao decidir se havia informação suficiente para responder.")
 
-    return Evaluation(
-        json_valid=True,
-        schema_valid=True,
-        name_preserved=name_ok,
-        amount_preserved=amount_ok,
-        due_date_preserved=date_ok,
-        expected_category=category_ok,
-        fidelity_score=round(sum(checks) / len(checks) * 100, 2),
+    return QueryEvaluation(
+        retrieval_hit=retrieval_hit,
+        required_facts_total=total,
+        required_facts_preserved=preserved,
+        factual_score=factual_score,
+        source_accuracy=source_accuracy,
+        hallucination_free=hallucination_free,
+        abstention_ok=abstention_ok,
         notes=notes,
     )

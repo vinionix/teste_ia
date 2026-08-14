@@ -1,57 +1,82 @@
 [
   {
-    "id": "pending_basic",
-    "record": {
-      "cliente": "João Silva",
-      "plano": "Premium",
-      "valor": 149.90,
-      "status": "pagamento_pendente",
-      "vencimento": "15/08/2026"
-    },
-    "expected_category": "financeiro"
+    "id": "vacation_notice",
+    "question": "Com quanta antecedência eu preciso pedir minhas férias?",
+    "expected_document_ids": [1],
+    "required_facts": ["30 dias corridos de antecedência"],
+    "forbidden_facts": ["15 dias de antecedência", "60 dias de antecedência"],
+    "should_answer": true
   },
   {
-    "id": "pending_small_value",
-    "record": {
-      "cliente": "Mariana Costa",
-      "plano": "Essencial",
-      "valor": 39.90,
-      "status": "pagamento_pendente",
-      "vencimento": "20/08/2026"
-    },
-    "expected_category": "financeiro"
+    "id": "vacation_split",
+    "question": "Posso dividir minhas férias? Quais são os limites?",
+    "expected_document_ids": [1],
+    "required_facts": ["até 3 períodos", "14 dias corridos", "5 dias corridos"],
+    "forbidden_facts": ["até 2 períodos", "10 dias corridos cada"],
+    "should_answer": true
   },
   {
-    "id": "paid",
-    "record": {
-      "cliente": "Carlos Souza",
-      "plano": "Pro",
-      "valor": 89.00,
-      "status": "pagamento_confirmado",
-      "vencimento": "05/08/2026"
-    },
-    "expected_category": "informativo"
+    "id": "general_benefits",
+    "question": "Quais benefícios financeiros e de bem-estar eu recebo na empresa?",
+    "expected_document_ids": [2],
+    "required_facts": ["R$ 42,00 por dia útil", "R$ 650,00", "R$ 180,00 por mês"],
+    "forbidden_facts": ["R$ 50,00 por dia", "R$ 800,00"],
+    "should_answer": true
   },
   {
-    "id": "support",
-    "record": {
-      "cliente": "Ana Pereira",
-      "plano": "Premium",
-      "valor": 149.90,
-      "status": "suporte_solicitado",
-      "vencimento": "25/08/2026"
-    },
-    "expected_category": "suporte"
+    "id": "health_copay",
+    "question": "Quanto é a coparticipação do plano de saúde para consultas e exames simples?",
+    "expected_document_ids": [3],
+    "required_facts": ["20%", "R$ 120,00 por procedimento"],
+    "forbidden_facts": ["30%", "R$ 200,00"],
+    "should_answer": true
   },
   {
-    "id": "high_value",
-    "record": {
-      "cliente": "Empresa Aurora Ltda",
-      "plano": "Enterprise",
-      "valor": 1299.50,
-      "status": "pagamento_pendente",
-      "vencimento": "31/08/2026"
-    },
-    "expected_category": "financeiro"
+    "id": "home_office",
+    "question": "Quantos dias posso trabalhar remoto e qual é o auxílio home office?",
+    "expected_document_ids": [4],
+    "required_facts": ["até 3 dias", "R$ 180,00 mensais"],
+    "forbidden_facts": ["5 dias", "R$ 300,00"],
+    "should_answer": true
+  },
+  {
+    "id": "education_budget",
+    "question": "Qual é meu orçamento anual para cursos e certificações e quando preciso de aprovação prévia?",
+    "expected_document_ids": [5],
+    "required_facts": ["R$ 2.400,00", "acima de R$ 600,00"],
+    "forbidden_facts": ["R$ 5.000,00", "acima de R$ 1.000,00"],
+    "should_answer": true
+  },
+  {
+    "id": "wellbeing",
+    "question": "Quantas sessões de psicoterapia o Aurora Vida oferece por mês?",
+    "expected_document_ids": [6],
+    "required_facts": ["4 sessões de psicoterapia por mês"],
+    "forbidden_facts": ["8 sessões", "sessões ilimitadas"],
+    "should_answer": true
+  },
+  {
+    "id": "travel_reimbursement",
+    "question": "Qual é o limite diário de refeição em viagem e o teto de hospedagem?",
+    "expected_document_ids": [7],
+    "required_facts": ["R$ 95,00 por dia", "R$ 480,00 por diária"],
+    "forbidden_facts": ["R$ 150,00", "R$ 700,00"],
+    "should_answer": true
+  },
+  {
+    "id": "unknown_bonus",
+    "question": "Qual é o percentual do meu bônus anual por performance?",
+    "expected_document_ids": [],
+    "required_facts": [],
+    "forbidden_facts": ["10%", "15%", "20%", "30%"],
+    "should_answer": false
+  },
+  {
+    "id": "unknown_stock",
+    "question": "Depois de quanto tempo eu recebo stock options da empresa?",
+    "expected_document_ids": [],
+    "required_facts": [],
+    "forbidden_facts": ["1 ano", "2 anos", "4 anos", "vesting"],
+    "should_answer": false
   }
 ]

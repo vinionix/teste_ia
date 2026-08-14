@@ -1,25 +1,29 @@
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class SourceRecord(BaseModel):
-    cliente: str = Field(min_length=1)
-    plano: str = Field(min_length=1)
-    valor: float = Field(ge=0)
-    status: str = Field(min_length=1)
-    vencimento: str = Field(min_length=1)
+class Document(BaseModel):
+    id: int
+    title: str
+    category: str
+    content: str
 
 
-class FormattedText(BaseModel):
-    titulo: str = Field(min_length=1, max_length=100)
-    mensagem: str = Field(min_length=1, max_length=600)
-    categoria: Literal["financeiro", "informativo", "suporte", "outro"]
+class RetrievedDocument(Document):
+    score: int = 0
 
 
-class CompareRequest(BaseModel):
-    record: SourceRecord
+class QueryRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=1000)
     models: list[str] = Field(default_factory=list)
+    top_k: int = Field(default=3, ge=1, le=10)
+
+
+class GroundedAnswer(BaseModel):
+    resposta: str = Field(min_length=1, max_length=1600)
+    fontes: list[int] = Field(default_factory=list)
+    encontrado: bool
 
 
 class MetricSnapshot(BaseModel):
@@ -33,39 +37,47 @@ class MetricSnapshot(BaseModel):
     cpu_only_verified: bool
 
 
-class Evaluation(BaseModel):
-    json_valid: bool
-    schema_valid: bool
-    name_preserved: bool
-    amount_preserved: bool
-    due_date_preserved: bool
-    expected_category: bool | None = None
-    fidelity_score: float
+class QueryEvaluation(BaseModel):
+    retrieval_hit: bool | None = None
+    required_facts_total: int = 0
+    required_facts_preserved: int = 0
+    factual_score: float = 0.0
+    source_accuracy: bool | None = None
+    hallucination_free: bool = True
+    abstention_ok: bool | None = None
     notes: list[str] = Field(default_factory=list)
 
 
 class ModelResult(BaseModel):
     model: str
     ok: bool
-    output: FormattedText | None = None
+    question: str
+    answer: GroundedAnswer | None = None
     raw_output: str = ""
+    retrieved_documents: list[RetrievedDocument] = Field(default_factory=list)
     metrics: MetricSnapshot | None = None
-    evaluation: Evaluation | None = None
+    evaluation: QueryEvaluation | None = None
     error: str | None = None
 
 
 class TestCase(BaseModel):
     id: str
-    record: SourceRecord
-    expected_category: str
+    question: str
+    expected_document_ids: list[int] = Field(default_factory=list)
+    required_facts: list[str] = Field(default_factory=list)
+    forbidden_facts: list[str] = Field(default_factory=list)
+    should_answer: bool = True
 
 
 class BenchmarkRow(BaseModel):
     model: str
     cases: int
     successful_cases: int
-    schema_success_rate: float
-    avg_fidelity: float
+    avg_factual_score: float
+    retrieval_hit_rate: float
+    source_accuracy_rate: float
+    hallucination_free_rate: float
+    abstention_accuracy: float
     avg_total_ms: float
     avg_tokens_per_second: float
     cpu_only_all_runs: bool

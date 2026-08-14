@@ -6,23 +6,35 @@ import psutil
 from pydantic import ValidationError
 
 from .config import OLLAMA_URL, REQUEST_OPTIONS
-from .evaluator import evaluate_output
-from .schemas import FormattedText, MetricSnapshot, ModelResult, SourceRecord
+from .schemas import GroundedAnswer, MetricSnapshot, ModelResult, RetrievedDocument
 
-SYSTEM_PROMPT = """Você é um formatador de texto determinístico.
-Use SOMENTE os dados recebidos. Não invente nomes, valores, datas, status ou fatos.
-Escreva em português do Brasil, de forma curta e natural.
-A categoria deve ser uma destas: financeiro, informativo, suporte, outro.
-Para pagamentos pendentes, use financeiro.
+SYSTEM_PROMPT = """Você é um assistente interno de RH da empresa fictícia Aurora Labs.
+Responda EXCLUSIVAMENTE com base nos DOCUMENTOS fornecidos nesta requisição.
+Não use conhecimento externo, não complete lacunas e não invente políticas.
+Preserve exatamente números, valores, prazos, datas, limites e condições relevantes.
+Se os documentos não contiverem informação suficiente, defina encontrado=false,
+use fontes=[] e responda que a informação não foi encontrada nos documentos fornecidos.
+Quando responder, cite em fontes apenas os IDs dos documentos realmente utilizados.
+A resposta deve ser curta, objetiva e em português do Brasil.
 Retorne somente o objeto no schema solicitado."""
 
 
-def _build_prompt(record: SourceRecord) -> str:
-    return (
-        "Transforme o registro abaixo em uma mensagem curta para o cliente. "
-        "Preserve explicitamente o nome, o valor e o vencimento na mensagem.\n\n"
-        f"REGISTRO:\n{record.model_dump_json(indent=2)}"
-    )
+def _build_prompt(question: str, documents: list[RetrievedDocument]) -> str:
+    if documents:
+        context = "\n\n".join(
+            f"[DOCUMENTO {doc.id}]\nTítulo: {doc.title}\nCategoria: {doc.category}\nConteúdo: {doc.content}"
+            for doc in documents
+        )
+    else:
+        context = "Nenhum documento foi recuperado para esta consulta."
+
+    return f"""DOCUMENTOS RECUPERADOS:
+{context}
+
+PERGUNTA DO FUNCIONÁRIO:
+{question}
+
+Responda apenas com base nos documentos acima."""
 
 
 class OllamaClient:
@@ -44,7 +56,7 @@ class OllamaClient:
         response = await self.client.get(f"{self.base_url}/api/tags")
         response.raise_for_status()
         data = response.json()
-        return {item.get("name", "") for item in data.get("models", [])}
+        return {item.get("name", "") for item in data.get("models", []) if item.get("name")}
 
     async def _vram_for(self, model: str) -> int:
         try:
@@ -58,18 +70,18 @@ class OllamaClient:
             pass
         return 0
 
-    async def run_model(
+    async def run_grounded_query(
         self,
         model: str,
-        record: SourceRecord,
-        expected_category: str | None = None,
+        question: str,
+        documents: list[RetrievedDocument],
     ) -> ModelResult:
-        schema = FormattedText.model_json_schema()
+        schema = GroundedAnswer.model_json_schema()
         payload = {
             "model": model,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": _build_prompt(record)},
+                {"role": "user", "content": _build_prompt(question, documents)},
             ],
             "stream": False,
             "think": False,
@@ -90,12 +102,14 @@ class OllamaClient:
 
             try:
                 parsed_json = json.loads(raw)
-                output = FormattedText.model_validate(parsed_json)
+                answer = GroundedAnswer.model_validate(parsed_json)
             except (json.JSONDecodeError, ValidationError) as exc:
                 return ModelResult(
                     model=model,
                     ok=False,
+                    question=question,
                     raw_output=raw,
+                    retrieved_documents=documents,
                     error=f"Saída inválida: {exc}",
                 )
 
@@ -106,7 +120,10 @@ class OllamaClient:
             tps = (eval_count / (eval_duration / 1_000_000_000)) if eval_duration else 0.0
 
             metrics = MetricSnapshot(
-                total_ms=round(int(data.get("total_duration", 0) or int(wall_ms * 1_000_000)) / 1_000_000, 2),
+                total_ms=round(
+                    int(data.get("total_duration", 0) or int(wall_ms * 1_000_000)) / 1_000_000,
+                    2,
+                ),
                 load_ms=round(int(data.get("load_duration", 0) or 0) / 1_000_000, 2),
                 prompt_tokens=int(data.get("prompt_eval_count", 0) or 0),
                 output_tokens=eval_count,
@@ -119,13 +136,26 @@ class OllamaClient:
             return ModelResult(
                 model=model,
                 ok=True,
-                output=output,
+                question=question,
+                answer=answer,
                 raw_output=raw,
+                retrieved_documents=documents,
                 metrics=metrics,
-                evaluation=evaluate_output(record, output, expected_category),
             )
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text[:500]
-            return ModelResult(model=model, ok=False, error=f"Ollama respondeu {exc.response.status_code}: {detail}")
+            return ModelResult(
+                model=model,
+                ok=False,
+                question=question,
+                retrieved_documents=documents,
+                error=f"Ollama respondeu {exc.response.status_code}: {detail}",
+            )
         except httpx.HTTPError as exc:
-            return ModelResult(model=model, ok=False, error=f"Falha de conexão com Ollama: {exc}")
+            return ModelResult(
+                model=model,
+                ok=False,
+                question=question,
+                retrieved_documents=documents,
+                error=f"Falha de conexão com Ollama: {exc}",
+            )
