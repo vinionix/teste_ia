@@ -9,7 +9,7 @@ DATABASE_PATH = DATA_DIR / "hr_documents.db"
 DOCUMENTS_SEED_PATH = DATA_DIR / "hr_documents.json"
 CASES_PATH = DATA_DIR / "test_cases.json"
 
-DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "embeddinggemma")
+DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "embeddinggemma:latest")
 HYBRID_EMBEDDING_WEIGHT = min(
     1.0,
     max(0.0, float(os.getenv("HYBRID_EMBEDDING_WEIGHT", "0.5"))),
