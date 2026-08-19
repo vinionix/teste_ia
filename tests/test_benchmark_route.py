@@ -10,7 +10,7 @@ INSTALLED_MODELS = {
     "gemma3:1b",
     "llama3.2:1b",
     "qwen3:1.7b",
-    "embeddinggemma",
+    "embeddinggemma:latest",
 }
 
 
@@ -34,7 +34,7 @@ async def fake_run_benchmark(
     cases_path,
     database_path,
     top_k=3,
-    embedding_model="embeddinggemma",
+    embedding_model="embeddinggemma:latest",
 ) -> BenchmarkResponse:
     return BenchmarkResponse(
         rows=[],
@@ -69,6 +69,17 @@ def make_client(monkeypatch) -> TestClient:
         fake_run_benchmark,
     )
     return TestClient(app_module.app)
+
+
+def test_models_recognizes_default_embedding_latest_tag(monkeypatch):
+    client = make_client(monkeypatch)
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["embedding"]["model"] == "embeddinggemma:latest"
+    assert body["embedding"]["installed"] is True
+    assert "embeddinggemma:latest" not in body["installed"]
 
 
 def test_benchmark_accepts_repeated_model_query_parameters(monkeypatch):
