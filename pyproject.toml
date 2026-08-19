@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "cpu-llm-lab"
-version = "0.2.0"
-description = "CPU-only benchmark for grounded corporate document queries with small Ollama models"
+version = "0.3.0"
+description = "CPU-only retrieval and LLM benchmark for grounded corporate document queries"
 authors = ["Fidel <dev@example.invalid>"]
 readme = "README.md"
 packages = [{ include = "cpu_llm_lab", from = "src" }]

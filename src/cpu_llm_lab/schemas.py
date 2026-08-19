@@ -1,6 +1,9 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+
+RetrievalMode = Literal["lexical", "embedding", "hybrid"]
 
 
 class Document(BaseModel):
@@ -11,13 +14,23 @@ class Document(BaseModel):
 
 
 class RetrievedDocument(Document):
-    score: int = 0
+    score: float = 0.0
+
+
+class RetrievalTrace(BaseModel):
+    mode: RetrievalMode
+    latency_ms: float
+    embedding_ms: float = 0.0
+    ranked_document_ids: list[int] = Field(default_factory=list)
+    ranked_scores: list[float] = Field(default_factory=list)
 
 
 class QueryRequest(BaseModel):
     question: str = Field(min_length=3, max_length=1000)
     models: list[str] = Field(default_factory=list)
     top_k: int = Field(default=3, ge=1, le=10)
+    retrieval_mode: RetrievalMode = "lexical"
+    embedding_model: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class GroundedAnswer(BaseModel):
@@ -33,8 +46,8 @@ class MetricSnapshot(BaseModel):
     output_tokens: int
     tokens_per_second: float
     process_rss_mb: float
-    vram_bytes: int = 0
-    cpu_only_verified: bool
+    vram_bytes: int | None = None
+    cpu_only_verified: bool | None = None
 
 
 class QueryEvaluation(BaseModel):
@@ -55,8 +68,10 @@ class ModelResult(BaseModel):
     answer: GroundedAnswer | None = None
     raw_output: str = ""
     retrieved_documents: list[RetrievedDocument] = Field(default_factory=list)
+    retrieval: RetrievalTrace | None = None
     metrics: MetricSnapshot | None = None
     evaluation: QueryEvaluation | None = None
+    trace_id: str | None = None
     error: str | None = None
 
 
@@ -71,16 +86,24 @@ class TestCase(BaseModel):
 
 class BenchmarkRow(BaseModel):
     model: str
+    retrieval_mode: RetrievalMode
+    embedding_model: str | None = None
     cases: int
     successful_cases: int
     avg_factual_score: float
     retrieval_hit_rate: float
+    recall_at_1: float
+    recall_at_3: float
+    recall_at_5: float
+    mrr: float
     source_accuracy_rate: float
     hallucination_free_rate: float
     abstention_accuracy: float
+    avg_retrieval_ms: float
+    avg_embedding_ms: float
     avg_total_ms: float
     avg_tokens_per_second: float
-    cpu_only_all_runs: bool
+    cpu_only_all_runs: bool | None
     errors: int
 
 

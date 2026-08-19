@@ -2,65 +2,129 @@
   {
     "id": "vacation_notice",
     "question": "Com quanta antecedência eu preciso pedir minhas férias?",
-    "expected_document_ids": [1],
-    "required_facts": ["30 dias corridos de antecedência"],
-    "forbidden_facts": ["15 dias de antecedência", "60 dias de antecedência"],
+    "expected_document_ids": [
+      1
+    ],
+    "required_facts": [
+      "30 dias corridos de antecedência"
+    ],
+    "forbidden_facts": [
+      "15 dias de antecedência",
+      "60 dias de antecedência"
+    ],
     "should_answer": true
   },
   {
     "id": "vacation_split",
     "question": "Posso dividir minhas férias? Quais são os limites?",
-    "expected_document_ids": [1],
-    "required_facts": ["até 3 períodos", "14 dias corridos", "5 dias corridos"],
-    "forbidden_facts": ["até 2 períodos", "10 dias corridos cada"],
+    "expected_document_ids": [
+      1
+    ],
+    "required_facts": [
+      "até 3 períodos",
+      "14 dias corridos",
+      "5 dias corridos"
+    ],
+    "forbidden_facts": [
+      "até 2 períodos",
+      "10 dias corridos cada"
+    ],
     "should_answer": true
   },
   {
     "id": "general_benefits",
     "question": "Quais benefícios financeiros e de bem-estar eu recebo na empresa?",
-    "expected_document_ids": [2],
-    "required_facts": ["R$ 42,00 por dia útil", "R$ 650,00", "R$ 180,00 por mês"],
-    "forbidden_facts": ["R$ 50,00 por dia", "R$ 800,00"],
+    "expected_document_ids": [
+      2
+    ],
+    "required_facts": [
+      "R$ 42,00 por dia útil",
+      "R$ 650,00",
+      "R$ 180,00 por mês"
+    ],
+    "forbidden_facts": [
+      "R$ 50,00 por dia",
+      "R$ 800,00"
+    ],
     "should_answer": true
   },
   {
     "id": "health_copay",
     "question": "Quanto é a coparticipação do plano de saúde para consultas e exames simples?",
-    "expected_document_ids": [3],
-    "required_facts": ["20%", "R$ 120,00 por procedimento"],
-    "forbidden_facts": ["30%", "R$ 200,00"],
+    "expected_document_ids": [
+      3
+    ],
+    "required_facts": [
+      "20%",
+      "R$ 120,00 por procedimento"
+    ],
+    "forbidden_facts": [
+      "30%",
+      "R$ 200,00"
+    ],
     "should_answer": true
   },
   {
     "id": "home_office",
     "question": "Quantos dias posso trabalhar remoto e qual é o auxílio home office?",
-    "expected_document_ids": [4],
-    "required_facts": ["até 3 dias", "R$ 180,00 mensais"],
-    "forbidden_facts": ["5 dias", "R$ 300,00"],
+    "expected_document_ids": [
+      4
+    ],
+    "required_facts": [
+      "até 3 dias",
+      "R$ 180,00 mensais"
+    ],
+    "forbidden_facts": [
+      "5 dias",
+      "R$ 300,00"
+    ],
     "should_answer": true
   },
   {
     "id": "education_budget",
     "question": "Qual é meu orçamento anual para cursos e certificações e quando preciso de aprovação prévia?",
-    "expected_document_ids": [5],
-    "required_facts": ["R$ 2.400,00", "acima de R$ 600,00"],
-    "forbidden_facts": ["R$ 5.000,00", "acima de R$ 1.000,00"],
+    "expected_document_ids": [
+      5
+    ],
+    "required_facts": [
+      "R$ 2.400,00",
+      "acima de R$ 600,00"
+    ],
+    "forbidden_facts": [
+      "R$ 5.000,00",
+      "acima de R$ 1.000,00"
+    ],
     "should_answer": true
   },
   {
     "id": "wellbeing",
     "question": "Quantas sessões de psicoterapia o Aurora Vida oferece por mês?",
-    "expected_document_ids": [6],
-    "required_facts": ["4 sessões de psicoterapia por mês"],
-    "forbidden_facts": ["8 sessões", "sessões ilimitadas"],
+    "expected_document_ids": [
+      6
+    ],
+    "required_facts": [
+      "4 sessões de psicoterapia por mês"
+    ],
+    "forbidden_facts": [
+      "8 sessões",
+      "sessões ilimitadas"
+    ],
     "should_answer": true
   },
   {
     "id": "travel_reimbursement",
     "question": "Qual é o limite diário de refeição em viagem e o teto de hospedagem?",
-    "expected_document_ids": [7],
-    "required_facts": ["R$ 95,00 por dia", "R$ 480,00 por diária"],
-    "forbidden_facts": ["R$ 150,00", "R$ 700,00"],
+    "expected_document_ids": [
+      7
+    ],
+    "required_facts": [
+      "R$ 95,00 por dia",
+      "R$ 480,00 por diária"
+    ],
+    "forbidden_facts": [
+      "R$ 150,00",
+      "R$ 700,00"
+    ],
     "should_answer": true
   },
   {
@@ -68,7 +132,12 @@
     "question": "Qual é o percentual do meu bônus anual por performance?",
     "expected_document_ids": [],
     "required_facts": [],
-    "forbidden_facts": ["10%", "15%", "20%", "30%"],
+    "forbidden_facts": [
+      "10%",
+      "15%",
+      "20%",
+      "30%"
+    ],
     "should_answer": false
   },
   {
@@ -76,7 +145,70 @@
     "question": "Depois de quanto tempo eu recebo stock options da empresa?",
     "expected_document_ids": [],
     "required_facts": [],
-    "forbidden_facts": ["1 ano", "2 anos", "4 anos", "vesting"],
+    "forbidden_facts": [
+      "1 ano",
+      "2 anos",
+      "4 anos",
+      "vesting"
+    ],
     "should_answer": false
+  },
+  {
+    "id": "semantic_home_office",
+    "question": "Quem atua à distância tem algum apoio financeiro mensal?",
+    "expected_document_ids": [
+      4
+    ],
+    "required_facts": [
+      "R$ 180,00 mensais"
+    ],
+    "forbidden_facts": [
+      "R$ 300,00"
+    ],
+    "should_answer": true
+  },
+  {
+    "id": "semantic_wellbeing",
+    "question": "Existe apoio psicológico disponibilizado todos os meses?",
+    "expected_document_ids": [
+      6
+    ],
+    "required_facts": [
+      "4 sessões de psicoterapia por mês"
+    ],
+    "forbidden_facts": [
+      "8 sessões",
+      "sessões ilimitadas"
+    ],
+    "should_answer": true
+  },
+  {
+    "id": "semantic_security",
+    "question": "Recebi uma mensagem estranha pedindo credenciais. O que faço?",
+    "expected_document_ids": [
+      10
+    ],
+    "required_facts": [
+      "imediatamente ao canal interno de Segurança"
+    ],
+    "forbidden_facts": [
+      "esperar 24 horas",
+      "não precisa comunicar"
+    ],
+    "should_answer": true
+  },
+  {
+    "id": "semantic_education",
+    "question": "A companhia banca estudos profissionais?",
+    "expected_document_ids": [
+      5
+    ],
+    "required_facts": [
+      "R$ 2.400,00"
+    ],
+    "forbidden_facts": [
+      "R$ 5.000,00"
+    ],
+    "should_answer": true
   }
 ]

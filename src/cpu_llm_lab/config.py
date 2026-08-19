@@ -9,6 +9,12 @@ DATABASE_PATH = DATA_DIR / "hr_documents.db"
 DOCUMENTS_SEED_PATH = DATA_DIR / "hr_documents.json"
 CASES_PATH = DATA_DIR / "test_cases.json"
 
+DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "embeddinggemma")
+HYBRID_EMBEDDING_WEIGHT = min(
+    1.0,
+    max(0.0, float(os.getenv("HYBRID_EMBEDDING_WEIGHT", "0.5"))),
+)
+
 RECOMMENDED_MODELS = [
     "gemma3:270m",
     "smollm2:135m",
@@ -26,5 +32,9 @@ REQUEST_OPTIONS = {
     "temperature": 0,
     "num_ctx": 4096,
     "num_predict": 320,
+    "num_gpu": 0,
+}
+
+EMBEDDING_OPTIONS = {
     "num_gpu": 0,
 }

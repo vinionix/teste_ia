@@ -21,7 +21,11 @@ def _normalize(text: str) -> str:
 
 
 def _tokens(text: str) -> set[str]:
-    return {token for token in _normalize(text).split() if len(token) > 2 and token not in STOPWORDS}
+    return {
+        token
+        for token in _normalize(text).split()
+        if len(token) > 2 and token not in STOPWORDS
+    }
 
 
 def init_database(db_path: Path, seed_path: Path) -> None:
@@ -62,21 +66,35 @@ def list_documents(db_path: Path) -> list[Document]:
     return [Document.model_validate(dict(row)) for row in rows]
 
 
-def search_documents(db_path: Path, query: str, limit: int = 3) -> list[RetrievedDocument]:
+def _lexical_score(query_tokens: set[str], document: Document) -> int:
+    title_tokens = _tokens(document.title)
+    category_tokens = _tokens(document.category)
+    content_tokens = _tokens(document.content)
+    return (
+        len(query_tokens & title_tokens) * 5
+        + len(query_tokens & category_tokens) * 3
+        + len(query_tokens & content_tokens)
+    )
+
+
+def rank_documents_lexical(db_path: Path, query: str) -> list[RetrievedDocument]:
     query_tokens = _tokens(query)
     scored: list[RetrievedDocument] = []
 
     for document in list_documents(db_path):
-        title_tokens = _tokens(document.title)
-        category_tokens = _tokens(document.category)
-        content_tokens = _tokens(document.content)
-        score = (
-            len(query_tokens & title_tokens) * 5
-            + len(query_tokens & category_tokens) * 3
-            + len(query_tokens & content_tokens)
-        )
+        score = _lexical_score(query_tokens, document)
         if score > 0:
-            scored.append(RetrievedDocument(**document.model_dump(), score=score))
+            scored.append(
+                RetrievedDocument(**document.model_dump(), score=float(score))
+            )
 
     scored.sort(key=lambda item: (-item.score, item.id))
-    return scored[:limit]
+    return scored
+
+
+def search_documents(
+    db_path: Path,
+    query: str,
+    limit: int = 3,
+) -> list[RetrievedDocument]:
+    return rank_documents_lexical(db_path, query)[:limit]

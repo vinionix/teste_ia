@@ -1,102 +1,172 @@
 # CPU LLM Lab
 
-Laboratório local para comparar **LLMs pequenos e baratos em CPU** em uma tarefa corporativa de consulta fundamentada em documentos.
+Laboratório local para comparar **retrieval + LLMs pequenos em CPU** em consultas corporativas fundamentadas em documentos.
 
-A pergunta central do projeto é simples:
+A pergunta central continua sendo:
 
-> Qual é o menor modelo que ainda consegue responder com fidelidade suficiente para uma tarefa específica, sem inventar ou alterar informações da base?
+> Qual é a configuração mais barata que mantém qualidade suficiente para uma tarefa específica sem inventar ou alterar informações da base?
 
-Em vez de comparar modelos apenas por tamanho ou benchmark genérico, a aplicação mede comportamento em um cenário controlado e reproduzível.
+A versão **0.3.0** amplia o experimento: agora o laboratório compara não apenas modelos de linguagem, mas também **estratégias de recuperação de contexto**.
 
-## Problema que o projeto investiga
+## v0.3 — Retrieval Lab
 
-Modelos maiores costumam entregar mais capacidade geral, mas também aumentam custo, memória e latência. Em vários cenários corporativos, porém, a tarefa é estreita: consultar políticas, procedimentos ou documentos internos e devolver uma resposta fundamentada.
+O projeto oferece três retrievers:
 
-O CPU LLM Lab foi criado para estudar esse trade-off entre:
+- `lexical`: baseline original baseada em palavras e pesos `5/3/1`;
+- `embedding`: busca semântica com embeddings gerados pelo Ollama;
+- `hybrid`: combinação normalizada do score lexical com similaridade semântica.
 
-- qualidade da resposta;
-- fidelidade ao documento;
-- capacidade de recusar quando não há evidência;
-- latência;
-- quantidade de tokens;
-- throughput;
-- custo computacional local.
+A baseline lexical foi mantida de propósito. O objetivo é medir se a complexidade extra do embedding realmente melhora o retrieval.
 
 ## Arquitetura
 
 ```text
 Pergunta
   ↓
-SQLite
+Retriever escolhido
+  ├── lexical
+  ├── embedding
+  └── hybrid
   ↓
-recuperação lexical (top-k)
-  ↓
-documentos relevantes
+Top-K documentos
   ↓
 contexto controlado
   ↓
-Ollama + modelo escolhido
+Ollama + modelo de geração
   ↓
 resposta estruturada + fontes
   ↓
-avaliação / benchmark
+avaliação
+  ↓
+benchmark de qualidade + retrieval + desempenho
 ```
 
-O modelo **não recebe acesso direto ao SQL**. A aplicação recupera os documentos primeiro e entrega apenas o contexto selecionado ao LLM. Isso mantém o experimento focado em grounded generation, e não em text-to-SQL.
+O modelo de geração **não recebe acesso direto ao SQL**. A aplicação recupera os documentos primeiro e entrega apenas o contexto selecionado ao LLM.
 
-## O que o benchmark mede
+## Retrieval lexical
+
+A baseline continua simples e interpretável:
+
+```text
+match no título     × 5
+match na categoria  × 3
+match no conteúdo   × 1
+```
+
+Esses pesos são uma heurística do laboratório, não valores derivados de um paper. Eles existem para servir como baseline controlada.
+
+## Retrieval por embedding
+
+O `EmbeddingRetriever` usa `POST /api/embed` do Ollama.
+
+Por padrão:
+
+```text
+embedding_model = embeddinggemma
+```
+
+Documentos são transformados em vetores e mantidos em cache em memória. A pergunta também é transformada em vetor e o ranking é calculado por **similaridade de cosseno**.
+
+Não existe vector database na v0.3. Com apenas dez documentos, calcular o ranking diretamente deixa o experimento mais transparente.
+
+Documentação oficial:
+
+- https://docs.ollama.com/api/embed
+- https://docs.ollama.com/capabilities/embeddings
+
+## Retrieval híbrido
+
+O modo `hybrid` combina os dois sinais:
+
+```text
+score híbrido =
+    peso_embedding × score_semântico_normalizado
+    +
+    (1 - peso_embedding) × score_lexical_normalizado
+```
+
+O valor padrão é:
+
+```text
+HYBRID_EMBEDDING_WEIGHT = 0.5
+```
+
+Ele pode ser alterado pela variável de ambiente de mesmo nome. O valor `0.5` é uma baseline neutra, não uma afirmação de que metade/metade seja universalmente ótimo.
+
+## Métricas de retrieval
+
+Além de `retrieval_hit`, a v0.3 mede:
+
+- `Recall@1`: quanto do conjunto de documentos esperados aparece na primeira posição;
+- `Recall@3`: quanto aparece nos três primeiros;
+- `Recall@5`: quanto aparece nos cinco primeiros;
+- `MRR`: posição do primeiro documento relevante;
+- latência média do retrieval;
+- tempo gasto especificamente na geração dos embeddings.
+
+Perguntas sem documento esperado não entram no cálculo de Recall/MRR.
+
+## Métricas do LLM
+
+Continuam sendo medidas:
 
 - preservação de fatos obrigatórios;
-- recuperação do documento esperado;
-- citação da fonte esperada;
-- ausência de alterações conhecidas nos fatos;
-- capacidade de recusar perguntas cuja resposta não existe na base;
+- recuperação do documento esperado no Top-K enviado ao modelo;
+- citação de fonte esperada;
+- ausência de alterações conhecidas;
+- capacidade de recusar quando não há evidência;
 - latência;
 - tokens de entrada e saída;
-- tokens por segundo;
-- desempenho comparativo por modelo.
+- tokens por segundo.
 
-> A checagem automática de factualidade usada aqui é determinística e baseada nos casos de teste. Ela funciona como proxy de fidelidade e não como prova de que cada frase gerada é totalmente suportada pela fonte.
+A checagem automática de factualidade continua sendo uma proxy determinística baseada nos casos de teste.
+
+## Casos semânticos
+
+`data/test_cases.json` agora contém paráfrases desenhadas para reduzir a dependência de palavras idênticas.
+
+Exemplos:
+
+```text
+"Quem atua à distância tem algum apoio financeiro mensal?"
+"Existe apoio psicológico disponibilizado todos os meses?"
+"Recebi uma mensagem estranha pedindo credenciais. O que faço?"
+"A companhia banca estudos profissionais?"
+```
+
+Esses casos ajudam a expor diferenças entre recuperação lexical e semântica.
+
+## Observabilidade básica
+
+A v0.3 adiciona tracing estruturado com `trace_id`.
+
+São registrados spans como:
+
+```text
+api.query
+retrieval.search
+ollama.embed
+ollama.chat
+evaluation.query
+benchmark.run
+benchmark.case
+```
+
+Os logs são JSON e registram metadados como modo de retrieval, modelo, Top-K e duração. O conteúdo completo dos documentos e prompts não é enviado aos logs.
+
+Se a API do OpenTelemetry estiver instalada no ambiente, os spans também usam o tracer global. A v0.3 não obriga um backend específico de observabilidade; exportadores/Collector/Grafana podem ser adicionados depois.
+
+## CPU-only
+
+A geração e os embeddings são enviados ao Ollama com `num_gpu=0`.
+
+A verificação de VRAM foi corrigida: quando `/api/ps` não permite confirmar o valor, o projeto usa `None`/`desconhecido` em vez de assumir falsamente que VRAM é zero.
 
 ## Base fictícia
 
-Os documentos estão em `data/hr_documents.json` e representam a empresa fictícia **Aurora Labs**. A base inclui temas como:
+Os documentos estão em `data/hr_documents.json` e representam a empresa fictícia **Aurora Labs**.
 
-1. férias e descanso;
-2. benefícios gerais;
-3. plano de saúde e odontológico;
-4. trabalho híbrido e auxílio home office;
-5. educação e certificações;
-6. bem-estar;
-7. viagens e reembolsos;
-8. licenças familiares;
-9. mobilidade;
-10. segurança da informação.
-
-No startup, `database.py` sincroniza esses documentos com `data/hr_documents.db` usando SQLite.
-
-## Casos negativos e alucinação
-
-O benchmark não contém apenas perguntas respondíveis. Existem casos cuja resposta **não está na base**.
-
-Esses testes verificam se o modelo consegue dizer que não encontrou a informação em vez de preencher a lacuna com conhecimento externo ou invenção. Para este projeto, saber recusar corretamente é parte da qualidade.
-
-## Modelos sugeridos para comparação
-
-O frontend mostra automaticamente os modelos instalados no Ollama e também recomenda uma faixa de modelos pequenos, por exemplo:
-
-- `gemma3:270m`
-- `smollm2:135m`
-- `smollm2:360m`
-- `qwen3:0.6b`
-- `gemma3:1b`
-- `llama3.2:1b`
-- `qwen3:1.7b`
-- `smollm2:1.7b`
-- `llama3.2:3b`
-- `qwen3:4b`
-
-Qualquer outro modelo instalado localmente também pode ser usado no laboratório.
+No startup, `database.py` sincroniza os documentos com `data/hr_documents.db` usando SQLite.
 
 ## Pré-requisitos
 
@@ -110,12 +180,16 @@ Qualquer outro modelo instalado localmente também pode ser usado no laboratóri
 poetry install
 ```
 
-Exemplo de download de modelos:
+Instale pelo menos um modelo de geração:
 
 ```bash
-ollama pull gemma3:270m
 ollama pull qwen3:0.6b
-ollama pull llama3.2:1b
+```
+
+Para `embedding` e `hybrid`, instale também:
+
+```bash
+ollama pull embeddinggemma
 ```
 
 ## Executar
@@ -138,51 +212,86 @@ http://127.0.0.1:8000
 - `POST /api/query`
 - `POST /api/benchmark`
 
-## Como conduzir um experimento
+### Consulta
 
-1. Instale os modelos que deseja comparar.
-2. Execute a aplicação localmente.
-3. Rode os mesmos casos de benchmark em cada modelo.
-4. Compare fidelidade e métricas de desempenho.
-5. Analise os padrões de falha, não apenas o score agregado.
-6. Identifique o menor modelo que ainda atende o nível de qualidade desejado.
+Exemplo de body:
 
-## Decisões de engenharia
+```json
+{
+  "question": "Quem atua à distância tem algum apoio financeiro mensal?",
+  "models": ["qwen3:0.6b"],
+  "top_k": 3,
+  "retrieval_mode": "embedding",
+  "embedding_model": "embeddinggemma"
+}
+```
 
-Este projeto é deliberadamente simples em alguns pontos:
+### Benchmark
 
-- recuperação lexical em vez de um pipeline vetorial completo;
-- base local e fictícia para manter experimentos reproduzíveis;
-- checagens determinísticas no benchmark;
-- execução local via Ollama;
-- foco em uma tarefa estreita em vez de avaliação geral de modelos.
+O endpoint aceita parâmetros repetidos:
 
-Essas escolhas ajudam a isolar o comportamento que está sendo estudado e reduzem custo e complexidade experimental.
+```text
+models=qwen3:0.6b
+retrieval_modes=lexical
+retrieval_modes=embedding
+retrieval_modes=hybrid
+top_k=3
+```
+
+Comparar três retrievers executa o LLM três vezes por caso/modelo. Em CPU, selecione poucos modelos quando quiser uma rodada rápida.
+
+## Como conduzir o experimento
+
+1. Rode `lexical` como baseline.
+2. Rode `embedding` nas mesmas perguntas.
+3. Observe principalmente os casos de paráfrase.
+4. Compare Recall@K e MRR.
+5. Compare também a mudança no `factual_score`.
+6. Rode `hybrid`.
+7. Analise o ganho de qualidade em relação à latência extra.
+8. Só então decida se a complexidade adicional vale a pena.
+
+## Estrutura relevante
+
+```text
+src/cpu_llm_lab/
+├── app.py
+├── benchmark.py
+├── config.py
+├── database.py
+├── evaluator.py
+├── observability.py
+├── ollama_client.py
+├── retrieval.py
+└── schemas.py
+```
 
 ## Limitações atuais
 
-- o benchmark de factualidade é task-specific;
-- recuperação lexical pode perder relações semânticas;
-- os resultados dependem do hardware local e da quantização do modelo;
-- o projeto não pretende medir capacidade geral de um LLM;
-- ausência de uma resposta incorreta conhecida não garante factualidade completa.
-
-## O que este projeto demonstra
-
-- avaliação prática de LLMs;
-- grounded generation;
-- execução CPU-only;
-- análise de qualidade × custo computacional;
-- testes de recusa e pressão contra alucinação;
-- FastAPI e saída estruturada;
-- experimentação reproduzível com modelos locais.
+- base muito pequena;
+- embeddings ficam apenas em cache de memória;
+- score híbrido ainda usa peso heurístico;
+- factualidade ainda usa correspondência textual determinística;
+- `hallucination_free` só detecta erros previamente cadastrados;
+- observabilidade ainda não possui backend persistente;
+- não há repetição estatística de cada combinação;
+- o projeto continua task-specific.
 
 ## Documentação
 
-- [Technical Overview](docs/TECHNICAL_OVERVIEW.md) — arquitetura, metodologia de avaliação, fronteiras do experimento e ideias para próximos testes.
+- [Technical Overview](docs/TECHNICAL_OVERVIEW.md)
+- [v0.3 Study Guide](docs/V03_STUDY_GUIDE.md)
 
-## Direção futura
+## Próximas linhas de pesquisa
 
-Entre os experimentos que podem ser adicionados estão recuperação híbrida/vetorial, medição de memória e CPU, comparação entre quantizações, testes adversariais e exportação de resultados históricos.
+Depois de compreender a v0.3, evoluções naturais incluem:
 
-O objetivo continua o mesmo: **descobrir quando um modelo menor é suficiente para uma tarefa realista**.
+- avaliação factual por claims estruturadas;
+- source precision/source recall;
+- repetições e percentis;
+- medição do processo Ollama;
+- persistência de histórico;
+- OpenTelemetry Collector;
+- múltiplos domínios e semantic routing.
+
+O objetivo permanece o mesmo: **descobrir quando uma solução menor é suficiente e medir exatamente o que se perde ou ganha ao aumentar a complexidade**.
