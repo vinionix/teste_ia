@@ -6,7 +6,7 @@ A pergunta central continua sendo:
 
 > Qual é a configuração mais barata que mantém qualidade suficiente para uma tarefa específica sem inventar ou alterar informações da base?
 
-A versão **0.3.0** amplia o experimento: agora o laboratório compara não apenas modelos de linguagem, mas também **estratégias de recuperação de contexto**.
+A versão **0.3.1** mantém o Retrieval Lab da v0.3 e melhora o rigor experimental: controla o cache dos embeddings, repete cada combinação, separa cold/warm retrieval e passa a reportar mediana e p95.
 
 ## v0.3 — Retrieval Lab
 
@@ -17,6 +17,22 @@ O projeto oferece três retrievers:
 - `hybrid`: combinação normalizada do score lexical com similaridade semântica.
 
 A baseline lexical foi mantida de propósito. O objetivo é medir se a complexidade extra do embedding realmente melhora o retrieval.
+
+## v0.3.1 — Rigor experimental
+
+A v0.3 revelou um viés importante: se `embedding` roda antes de `hybrid`, o segundo modo pode herdar os embeddings dos documentos já presentes em cache e parecer artificialmente mais rápido.
+
+A v0.3.1 controla isso da seguinte forma:
+
+- cada caso/retriever possui uma primeira repetição `cold`;
+- antes do `cold` de `embedding` ou `hybrid`, o cache de embeddings dos documentos é limpo;
+- as repetições seguintes são `warm` e reutilizam o cache;
+- retrievers e modelos são embaralhados com uma seed reproduzível para reduzir viés de ordem;
+- cada combinação pode ser repetida de 1 a 10 vezes;
+- o benchmark reporta média, mediana e p95 de latência;
+- os detalhes registram `benchmark_case_id` e número da repetição.
+
+Isso não torna o benchmark estatisticamente completo, mas remove o principal viés de cache observado na v0.3.
 
 ## Arquitetura
 
@@ -57,17 +73,17 @@ Esses pesos são uma heurística do laboratório, não valores derivados de um p
 
 ## Retrieval por embedding
 
-O `EmbeddingRetriever` usa `POST /api/embed` do Ollama.
+O retriever semântico usa `POST /api/embed` do Ollama.
 
 Por padrão:
 
 ```text
-embedding_model = embeddinggemma
+embedding_model = embeddinggemma:latest
 ```
 
 Documentos são transformados em vetores e mantidos em cache em memória. A pergunta também é transformada em vetor e o ranking é calculado por **similaridade de cosseno**.
 
-Não existe vector database na v0.3. Com apenas dez documentos, calcular o ranking diretamente deixa o experimento mais transparente.
+Não existe vector database na v0.3.1. Com apenas dez documentos, calcular o ranking diretamente deixa o experimento mais transparente.
 
 Documentação oficial:
 
@@ -95,16 +111,36 @@ Ele pode ser alterado pela variável de ambiente de mesmo nome. O valor `0.5` é
 
 ## Métricas de retrieval
 
-Além de `retrieval_hit`, a v0.3 mede:
+O benchmark mede:
 
-- `Recall@1`: quanto do conjunto de documentos esperados aparece na primeira posição;
-- `Recall@3`: quanto aparece nos três primeiros;
-- `Recall@5`: quanto aparece nos cinco primeiros;
-- `MRR`: posição do primeiro documento relevante;
+- `Recall@1`;
+- `Recall@3`;
+- `Recall@5`;
+- `MRR`;
 - latência média do retrieval;
-- tempo gasto especificamente na geração dos embeddings.
+- mediana da latência;
+- p95 da latência;
+- média cold;
+- média warm;
+- tempo cold/warm gasto em embeddings.
 
 Perguntas sem documento esperado não entram no cálculo de Recall/MRR.
+
+### Cold vs warm
+
+Para `embedding` e `hybrid`:
+
+```text
+cold
+→ cache dos embeddings de documentos limpo
+→ documentos + pergunta precisam de embedding
+
+warm
+→ embeddings dos documentos já estão no cache
+→ apenas a pergunta precisa de embedding novamente
+```
+
+Assim os dois retrievers semânticos pagam seu próprio cold start, em vez de um herdar o cache criado pelo outro.
 
 ## Métricas do LLM
 
@@ -115,7 +151,9 @@ Continuam sendo medidas:
 - citação de fonte esperada;
 - ausência de alterações conhecidas;
 - capacidade de recusar quando não há evidência;
-- latência;
+- latência média;
+- mediana da latência;
+- p95 da latência;
 - tokens de entrada e saída;
 - tokens por segundo.
 
@@ -123,7 +161,7 @@ A checagem automática de factualidade continua sendo uma proxy determinística 
 
 ## Casos semânticos
 
-`data/test_cases.json` agora contém paráfrases desenhadas para reduzir a dependência de palavras idênticas.
+`data/test_cases.json` contém paráfrases desenhadas para reduzir a dependência de palavras idênticas.
 
 Exemplos:
 
@@ -138,7 +176,7 @@ Esses casos ajudam a expor diferenças entre recuperação lexical e semântica.
 
 ## Observabilidade básica
 
-A v0.3 adiciona tracing estruturado com `trace_id`.
+O projeto usa tracing estruturado com `trace_id`.
 
 São registrados spans como:
 
@@ -150,17 +188,18 @@ ollama.chat
 evaluation.query
 benchmark.run
 benchmark.case
+benchmark.retrieval
 ```
 
 Os logs são JSON e registram metadados como modo de retrieval, modelo, Top-K e duração. O conteúdo completo dos documentos e prompts não é enviado aos logs.
 
-Se a API do OpenTelemetry estiver instalada no ambiente, os spans também usam o tracer global. A v0.3 não obriga um backend específico de observabilidade; exportadores/Collector/Grafana podem ser adicionados depois.
+Se a API do OpenTelemetry estiver instalada no ambiente, os spans também usam o tracer global. O projeto não obriga um backend específico de observabilidade; exportadores/Collector/Grafana podem ser adicionados depois.
 
 ## CPU-only
 
 A geração e os embeddings são enviados ao Ollama com `num_gpu=0`.
 
-A verificação de VRAM foi corrigida: quando `/api/ps` não permite confirmar o valor, o projeto usa `None`/`desconhecido` em vez de assumir falsamente que VRAM é zero.
+Quando `/api/ps` não permite confirmar o uso de VRAM, o projeto usa `None`/`desconhecido` em vez de assumir falsamente que VRAM é zero.
 
 ## Base fictícia
 
@@ -222,13 +261,13 @@ Exemplo de body:
   "models": ["qwen3:0.6b"],
   "top_k": 3,
   "retrieval_mode": "embedding",
-  "embedding_model": "embeddinggemma"
+  "embedding_model": "embeddinggemma:latest"
 }
 ```
 
 ### Benchmark
 
-O endpoint aceita parâmetros repetidos:
+O endpoint aceita parâmetros repetidos e controles experimentais:
 
 ```text
 models=qwen3:0.6b
@@ -236,20 +275,27 @@ retrieval_modes=lexical
 retrieval_modes=embedding
 retrieval_modes=hybrid
 top_k=3
+repetitions=3
+order_seed=42
 ```
 
-Comparar três retrievers executa o LLM três vezes por caso/modelo. Em CPU, selecione poucos modelos quando quiser uma rodada rápida.
+Com 14 casos, 3 retrievers, 1 modelo e 3 repetições:
+
+```text
+14 × 3 × 1 × 3 = 126 inferências de LLM
+```
+
+Em CPU, selecione poucos modelos quando quiser uma rodada rápida.
 
 ## Como conduzir o experimento
 
-1. Rode `lexical` como baseline.
-2. Rode `embedding` nas mesmas perguntas.
-3. Observe principalmente os casos de paráfrase.
-4. Compare Recall@K e MRR.
-5. Compare também a mudança no `factual_score`.
-6. Rode `hybrid`.
-7. Analise o ganho de qualidade em relação à latência extra.
-8. Só então decida se a complexidade adicional vale a pena.
+1. Use pelo menos 3 repetições para comparar latência.
+2. Mantenha a mesma `order_seed` quando quiser reproduzir a mesma ordem.
+3. Compare `cold retrieval` separadamente de `warm retrieval`.
+4. Use mediana e p95 junto da média.
+5. Compare Recall@K e MRR antes de atribuir um erro ao LLM.
+6. Compare a mudança no `factual_score` somente depois de confirmar que o contexto correto chegou.
+7. Analise os padrões de falha, não apenas a maior porcentagem da tabela.
 
 ## Estrutura relevante
 
@@ -269,27 +315,33 @@ src/cpu_llm_lab/
 ## Limitações atuais
 
 - base muito pequena;
-- embeddings ficam apenas em cache de memória;
 - score híbrido ainda usa peso heurístico;
 - factualidade ainda usa correspondência textual determinística;
 - `hallucination_free` só detecta erros previamente cadastrados;
 - observabilidade ainda não possui backend persistente;
-- não há repetição estatística de cada combinação;
+- 3 repetições ainda são poucas para inferência estatística forte;
+- o benchmark controla cold/warm do **retrieval**, mas ainda não força um cold start independente do LLM em cada execução;
+- resultados continuam dependentes do hardware, quantização e condições locais;
 - o projeto continua task-specific.
+
+## Testes e CI
+
+A suíte cobre API, métricas de retrieval, similaridade de cosseno, cache cold/warm e o fluxo de benchmark repetido. O repositório também executa `pytest` no GitHub Actions a cada push e pull request.
 
 ## Documentação
 
 - [Technical Overview](docs/TECHNICAL_OVERVIEW.md)
 - [v0.3 Study Guide](docs/V03_STUDY_GUIDE.md)
+- [v0.3.1 Experimental Rigor](docs/V031_EXPERIMENTAL_RIGOR.md)
 
 ## Próximas linhas de pesquisa
 
-Depois de compreender a v0.3, evoluções naturais incluem:
+Depois de compreender a v0.3.1, evoluções naturais incluem:
 
 - avaliação factual por claims estruturadas;
 - source precision/source recall;
-- repetições e percentis;
 - medição do processo Ollama;
+- cold/warm start controlado do modelo de geração;
 - persistência de histórico;
 - OpenTelemetry Collector;
 - múltiplos domínios e semantic routing.
