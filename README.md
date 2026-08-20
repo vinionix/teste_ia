@@ -59,6 +59,17 @@ benchmark de qualidade + retrieval + desempenho
 
 O modelo de geração **não recebe acesso direto ao SQL**. A aplicação recupera os documentos primeiro e entrega apenas o contexto selecionado ao LLM.
 
+## Modelos de geração recomendados
+
+A lista de modelos recomendados inclui famílias pequenas de Gemma, SmolLM, Qwen, Llama, DeepSeek e Mistral/Ministral.
+
+Para ampliar a faixa de comparação de baixo custo, foram adicionados:
+
+- `deepseek-r1:1.5b`: variante pequena da família DeepSeek-R1, útil para observar o custo e o comportamento de um modelo orientado a reasoning dentro do mesmo protocolo grounded;
+- `ministral-3:3b`: modelo da família Mistral otimizado para edge deployment, usado como opção Mistral relativamente pequena para comparação em CPU.
+
+Eles não são marcados automaticamente na interface: instale e selecione apenas quando quiser incluí-los no experimento, porque cada modelo adicional multiplica o número de inferências.
+
 ## Retrieval lexical
 
 A baseline continua simples e interpretável:
@@ -219,10 +230,17 @@ No startup, `database.py` sincroniza os documentos com `data/hr_documents.db` us
 poetry install
 ```
 
-Instale pelo menos um modelo de geração:
+Instale pelo menos um modelo de geração. Uma baseline pequena é:
 
 ```bash
 ollama pull qwen3:0.6b
+```
+
+Para incluir as duas novas famílias de baixo custo no benchmark:
+
+```bash
+ollama pull deepseek-r1:1.5b
+ollama pull ministral-3:3b
 ```
 
 Para `embedding` e `hybrid`, instale também:
