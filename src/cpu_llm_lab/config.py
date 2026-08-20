@@ -25,8 +25,11 @@ RECOMMENDED_MODELS = [
     "deepseek-r1:1.5b",
     "qwen3:1.7b",
     "smollm2:1.7b",
+    "qwen3.5:2b",
     "llama3.2:3b",
+    "granite4:3b",
     "ministral-3:3b",
+    "phi4-mini:3.8b",
     "qwen3:4b",
 ]
 
