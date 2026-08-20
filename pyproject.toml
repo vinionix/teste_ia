@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cpu-llm-lab"
-version = "0.3.0"
+version = "0.3.1"
 description = "CPU-only retrieval and LLM benchmark for grounded corporate document queries"
 authors = ["Fidel <dev@example.invalid>"]
 readme = "README.md"
