@@ -43,6 +43,21 @@ class Retriever:
             list[float],
         ] = {}
 
+    def clear_embedding_cache(self, model: str | None = None) -> int:
+        if model is None:
+            removed = len(self._embedding_cache)
+            self._embedding_cache.clear()
+            return removed
+
+        keys = [
+            key
+            for key in self._embedding_cache
+            if key[0] == model
+        ]
+        for key in keys:
+            self._embedding_cache.pop(key, None)
+        return len(keys)
+
     @staticmethod
     def _document_cache_key(
         model: str,

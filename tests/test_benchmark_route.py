@@ -35,6 +35,8 @@ async def fake_run_benchmark(
     database_path,
     top_k=3,
     embedding_model="embeddinggemma:latest",
+    repetitions=3,
+    order_seed=42,
 ) -> BenchmarkResponse:
     return BenchmarkResponse(
         rows=[],
@@ -48,6 +50,8 @@ async def fake_run_benchmark(
             "received_models": models,
             "retrieval_modes": retrieval_modes,
             "embedding_model": embedding_model,
+            "repetitions": repetitions,
+            "order_seed": order_seed,
         },
     )
 
@@ -105,6 +109,8 @@ def test_benchmark_accepts_repeated_model_query_parameters(monkeypatch):
     ]
     assert body["environment"]["retrieval_modes"] == ["lexical"]
     assert body["environment"]["top_k"] == 3
+    assert body["environment"]["repetitions"] == 3
+    assert body["environment"]["order_seed"] == 42
 
 
 def test_benchmark_accepts_repeated_retrieval_modes(monkeypatch):
@@ -116,14 +122,19 @@ def test_benchmark_accepts_repeated_retrieval_modes(monkeypatch):
         "&retrieval_modes=embedding"
         "&retrieval_modes=hybrid"
         "&top_k=3"
+        "&repetitions=5"
+        "&order_seed=123"
     )
 
     assert response.status_code == 200
-    assert response.json()["environment"]["retrieval_modes"] == [
+    body = response.json()
+    assert body["environment"]["retrieval_modes"] == [
         "lexical",
         "embedding",
         "hybrid",
     ]
+    assert body["environment"]["repetitions"] == 5
+    assert body["environment"]["order_seed"] == 123
 
 
 def test_benchmark_requires_at_least_one_model(monkeypatch):
@@ -160,6 +171,28 @@ def test_benchmark_validates_top_k_upper_bound(monkeypatch):
     client = make_client(monkeypatch)
     response = client.post(
         "/api/benchmark?models=qwen3%3A0.6b&top_k=11"
+    )
+
+    assert response.status_code == 422
+
+
+def test_benchmark_validates_repetition_bounds(monkeypatch):
+    client = make_client(monkeypatch)
+    low = client.post(
+        "/api/benchmark?models=qwen3%3A0.6b&repetitions=0"
+    )
+    high = client.post(
+        "/api/benchmark?models=qwen3%3A0.6b&repetitions=11"
+    )
+
+    assert low.status_code == 422
+    assert high.status_code == 422
+
+
+def test_benchmark_validates_order_seed(monkeypatch):
+    client = make_client(monkeypatch)
+    response = client.post(
+        "/api/benchmark?models=qwen3%3A0.6b&order_seed=-1"
     )
 
     assert response.status_code == 422
