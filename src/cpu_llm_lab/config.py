@@ -22,9 +22,11 @@ RECOMMENDED_MODELS = [
     "qwen3:0.6b",
     "gemma3:1b",
     "llama3.2:1b",
+    "deepseek-r1:1.5b",
     "qwen3:1.7b",
     "smollm2:1.7b",
     "llama3.2:3b",
+    "ministral-3:3b",
     "qwen3:4b",
 ]
 
