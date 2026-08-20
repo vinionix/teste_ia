@@ -72,6 +72,8 @@ class ModelResult(BaseModel):
     metrics: MetricSnapshot | None = None
     evaluation: QueryEvaluation | None = None
     trace_id: str | None = None
+    benchmark_case_id: str | None = None
+    benchmark_repetition: int | None = None
     error: str | None = None
 
 
@@ -88,8 +90,11 @@ class BenchmarkRow(BaseModel):
     model: str
     retrieval_mode: RetrievalMode
     embedding_model: str | None = None
+    repetitions: int
     cases: int
     successful_cases: int
+    executions: int
+    successful_executions: int
     avg_factual_score: float
     retrieval_hit_rate: float
     recall_at_1: float
@@ -100,8 +105,16 @@ class BenchmarkRow(BaseModel):
     hallucination_free_rate: float
     abstention_accuracy: float
     avg_retrieval_ms: float
+    median_retrieval_ms: float
+    p95_retrieval_ms: float
+    avg_cold_retrieval_ms: float
+    avg_warm_retrieval_ms: float
     avg_embedding_ms: float
+    avg_cold_embedding_ms: float
+    avg_warm_embedding_ms: float
     avg_total_ms: float
+    median_total_ms: float
+    p95_total_ms: float
     avg_tokens_per_second: float
     cpu_only_all_runs: bool | None
     errors: int
