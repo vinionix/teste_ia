@@ -370,3 +370,5 @@ Antes de seguir para outra feature, tente responder sem olhar:
 10. Por que ainda não podemos afirmar que medimos cold start real do LLM?
 
 Se essas respostas estiverem claras, você entendeu o motivo da v0.3.1.
+
+A suíte automatizada do repositório também verifica o comportamento de cache cold/warm e os controles de repetição do benchmark.
