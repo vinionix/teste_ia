@@ -39,7 +39,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="CPU LLM Lab",
-    version="0.3.0",
+    version="0.3.1",
     lifespan=lifespan,
 )
 
@@ -220,6 +220,8 @@ async def benchmark(
     retrieval_modes: list[RetrievalMode] | None = Query(default=None),
     top_k: int = Query(default=3, ge=1, le=10),
     embedding_model: str = Query(default=DEFAULT_EMBEDDING_MODEL),
+    repetitions: int = Query(default=3, ge=1, le=10),
+    order_seed: int = Query(default=42, ge=0, le=2_147_483_647),
 ):
     ollama = get_client()
     searcher = get_retriever()
@@ -244,6 +246,8 @@ async def benchmark(
             DATABASE_PATH,
             top_k=top_k,
             embedding_model=embedding_model,
+            repetitions=repetitions,
+            order_seed=order_seed,
         )
     except RuntimeError as exc:
         raise HTTPException(
@@ -281,12 +285,12 @@ button{background:#edf2f7;color:#111827;border:0;border-radius:9px;padding:11px 
 .models,.retrievers{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin:12px 0}.model,.retriever{display:flex;gap:7px;align-items:center;border:1px solid #2b3442;border-radius:9px;padding:9px}.model input,.retriever input{width:auto}.disabled{opacity:.55}
 .output{white-space:pre-wrap;background:#0f141b;padding:12px;border-radius:8px;min-height:70px}.metric{display:grid;grid-template-columns:1fr auto;gap:5px;font-size:14px}.pill{display:inline-block;border:1px solid #394454;border-radius:999px;padding:3px 8px;font-size:12px;margin:2px}
 table{width:100%;border-collapse:collapse;overflow:auto}th,td{text-align:left;padding:8px;border-bottom:1px solid #2b3442;font-size:12px;white-space:nowrap}.docs{display:flex;flex-wrap:wrap;gap:7px}.docs span{border:1px solid #394454;border-radius:999px;padding:5px 9px;font-size:12px}
-.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
 </style>
 </head>
 <body>
-<h1>CPU LLM Lab <small class="muted">v0.3</small></h1>
-<div class="muted">Retrieval Lab: lexical × embedding × híbrido, com métricas de recuperação e tracing básico.</div>
+<h1>CPU LLM Lab <small class="muted">v0.3.1</small></h1>
+<div class="muted">Retrieval Lab com cache controlado, repetições, mediana, p95 e ordem experimental reproduzível.</div>
 <div id="status" class="muted">Verificando ambiente…</div>
 
 <section class="panel">
@@ -320,11 +324,15 @@ table{width:100%;border-collapse:collapse;overflow:auto}th,td{text-align:left;pa
 
 <section class="panel">
 <h2>2. Benchmark</h2>
-<p class="muted">Selecione quais retrievers serão comparados. Embedding e Hybrid exigem o modelo de embedding instalado.</p>
+<p class="muted">A primeira repetição de cada retriever é tratada como cold. Para embedding/hybrid o cache de documentos é limpo antes dessa repetição; as demais são warm. A ordem de retrievers e modelos é embaralhada de forma reproduzível pela seed.</p>
 <div class="retrievers" id="retrievers">
 <label class="retriever"><input type="checkbox" value="lexical" checked> Lexical</label>
 <label class="retriever" id="embeddingChoice"><input type="checkbox" value="embedding" checked> Embedding</label>
 <label class="retriever" id="hybridChoice"><input type="checkbox" value="hybrid" checked> Hybrid</label>
+</div>
+<div class="control-grid">
+<div><label for="repetitions">Repetições por caso</label><input id="repetitions" type="number" min="1" max="10" value="3"></div>
+<div><label for="orderSeed">Seed da ordem</label><input id="orderSeed" type="number" min="0" max="2147483647" value="42"></div>
 </div>
 <button id="benchBtn" onclick="runBenchmark()">Rodar benchmark</button>
 <div id="benchmark"></div>
@@ -332,7 +340,7 @@ table{width:100%;border-collapse:collapse;overflow:auto}th,td{text-align:left;pa
 
 <script>
 let installedModels=[];
-let embeddingModel='embeddinggemma';
+let embeddingModel='embeddinggemma:latest';
 let embeddingReady=false;
 
 function esc(s){
@@ -352,7 +360,7 @@ async function init(){
   const [mr,dr]=await Promise.all([fetch('/api/models'),fetch('/api/documents')]);
   const m=await mr.json(),docs=await dr.json();
   installedModels=m.installed||[];
-  embeddingModel=(m.embedding||{}).model||'embeddinggemma';
+  embeddingModel=(m.embedding||{}).model||'embeddinggemma:latest';
   embeddingReady=Boolean((m.embedding||{}).installed);
   document.getElementById('status').innerHTML=m.ollama?'<span class="ok">● Ollama online</span> · banco carregado':'<span class="bad">● Ollama offline</span> · banco carregado';
   document.getElementById('embeddingStatus').innerHTML=embeddingReady
@@ -414,24 +422,29 @@ function card(x){
 async function runBenchmark(){
  const models=selectedModels();
  const modes=selectedRetrievers();
+ const repetitions=Number(document.getElementById('repetitions').value);
+ const orderSeed=Number(document.getElementById('orderSeed').value);
  if(!models.length){alert('Selecione pelo menos um modelo instalado.');return}
  if(!modes.length){alert('Selecione pelo menos um retriever.');return}
  const btn=document.getElementById('benchBtn');
  btn.disabled=true;
  btn.textContent='Executando benchmark…';
- document.getElementById('benchmark').innerHTML='<p class="muted">Executando casos sequencialmente. Comparar três retrievers multiplica o número de inferências.</p>';
+ const perCase=models.length*modes.length*repetitions;
+ document.getElementById('benchmark').innerHTML=`<p class="muted">Executando ${repetitions} repetição(ões). Cada caso fará ${perCase} inferência(s) de LLM.</p>`;
  try{
   const qs=[
     ...models.map(m=>'models='+encodeURIComponent(m)),
     ...modes.map(m=>'retrieval_modes='+encodeURIComponent(m)),
     'top_k='+encodeURIComponent(document.getElementById('topk').value),
-    'embedding_model='+encodeURIComponent(embeddingModel)
+    'embedding_model='+encodeURIComponent(embeddingModel),
+    'repetitions='+encodeURIComponent(repetitions),
+    'order_seed='+encodeURIComponent(orderSeed)
   ].join('&');
   const r=await fetch('/api/benchmark?'+qs,{method:'POST'});
   const d=await r.json();
   if(!r.ok)throw new Error(d.detail||'Erro');
   const cpu=x=>x===true?'sim':x===false?'não':'?';
-  document.getElementById('benchmark').innerHTML=`<p class="muted">RAM: ${d.environment.ram_gb} GB · ${d.environment.logical_cpus} threads · top_k=${d.environment.top_k} · embedding=${esc(d.environment.embedding_model)}</p><div style="overflow:auto"><table><thead><tr><th>Retriever</th><th>Modelo</th><th>R@1</th><th>R@3</th><th>R@5</th><th>MRR</th><th>Retrieval</th><th>Embedding</th><th>Fatos</th><th>Hit Top-K</th><th>Fontes</th><th>Sem alteração conhecida</th><th>Recusa</th><th>LLM</th><th>tokens/s</th><th>CPU</th><th>Erros</th></tr></thead><tbody>${d.rows.map(x=>`<tr><td>${esc(x.retrieval_mode)}</td><td>${esc(x.model)}</td><td>${x.recall_at_1}%</td><td>${x.recall_at_3}%</td><td>${x.recall_at_5}%</td><td>${x.mrr}</td><td>${x.avg_retrieval_ms} ms</td><td>${x.avg_embedding_ms} ms</td><td>${x.avg_factual_score}%</td><td>${x.retrieval_hit_rate}%</td><td>${x.source_accuracy_rate}%</td><td>${x.hallucination_free_rate}%</td><td>${x.abstention_accuracy}%</td><td>${x.avg_total_ms} ms</td><td>${x.avg_tokens_per_second}</td><td>${cpu(x.cpu_only_all_runs)}</td><td>${x.errors}</td></tr>`).join('')}</tbody></table></div>`
+  document.getElementById('benchmark').innerHTML=`<p class="muted">RAM: ${d.environment.ram_gb} GB · ${d.environment.logical_cpus} threads · top_k=${d.environment.top_k} · repetições=${d.environment.repetitions} · seed=${d.environment.order_seed} · inferências planejadas=${d.environment.planned_llm_executions}</p><div style="overflow:auto"><table><thead><tr><th>Retriever</th><th>Modelo</th><th>R@1</th><th>R@3</th><th>R@5</th><th>MRR</th><th>Ret avg</th><th>Ret med</th><th>Ret p95</th><th>Cold ret</th><th>Warm ret</th><th>Emb cold</th><th>Emb warm</th><th>Fatos</th><th>Hit Top-K</th><th>Fontes</th><th>Sem alteração conhecida</th><th>Recusa</th><th>LLM avg</th><th>LLM med</th><th>LLM p95</th><th>tokens/s</th><th>CPU</th><th>Erros</th></tr></thead><tbody>${d.rows.map(x=>`<tr><td>${esc(x.retrieval_mode)}</td><td>${esc(x.model)}</td><td>${x.recall_at_1}%</td><td>${x.recall_at_3}%</td><td>${x.recall_at_5}%</td><td>${x.mrr}</td><td>${x.avg_retrieval_ms} ms</td><td>${x.median_retrieval_ms} ms</td><td>${x.p95_retrieval_ms} ms</td><td>${x.avg_cold_retrieval_ms} ms</td><td>${x.avg_warm_retrieval_ms} ms</td><td>${x.avg_cold_embedding_ms} ms</td><td>${x.avg_warm_embedding_ms} ms</td><td>${x.avg_factual_score}%</td><td>${x.retrieval_hit_rate}%</td><td>${x.source_accuracy_rate}%</td><td>${x.hallucination_free_rate}%</td><td>${x.abstention_accuracy}%</td><td>${x.avg_total_ms} ms</td><td>${x.median_total_ms} ms</td><td>${x.p95_total_ms} ms</td><td>${x.avg_tokens_per_second}</td><td>${cpu(x.cpu_only_all_runs)}</td><td>${x.errors}</td></tr>`).join('')}</tbody></table></div>`
  }catch(e){
   document.getElementById('benchmark').innerHTML=`<p class="bad">${esc(e.message)}</p>`
  }
