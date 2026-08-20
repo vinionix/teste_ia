@@ -1,5 +1,7 @@
 import json
+import math
 import platform
+import random
 from pathlib import Path
 
 import psutil
@@ -31,6 +33,34 @@ def _average(values: list[float]) -> float:
     return round(sum(values) / len(values), 2) if values else 0.0
 
 
+def _median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return round(ordered[middle], 2)
+    return round((ordered[middle - 1] + ordered[middle]) / 2, 2)
+
+
+def _percentile(values: list[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+    if len(values) == 1:
+        return round(values[0], 2)
+
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * (percentile / 100.0)
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return round(ordered[lower], 2)
+
+    fraction = position - lower
+    value = ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
+    return round(value, 2)
+
+
 def _recall_at_k(
     expected_ids: set[int],
     ranked_ids: list[int],
@@ -54,6 +84,12 @@ def _reciprocal_rank(
     return 0.0
 
 
+def _shuffled(values: list[str], seed: int) -> list[str]:
+    result = list(values)
+    random.Random(seed).shuffle(result)
+    return result
+
+
 async def run_benchmark(
     client: OllamaClient,
     retriever: Retriever,
@@ -62,13 +98,19 @@ async def run_benchmark(
     cases_path: Path,
     database_path: Path,
     top_k: int = 3,
-    embedding_model: str = "embeddinggemma",
+    embedding_model: str = "embeddinggemma:latest",
+    repetitions: int = 3,
+    order_seed: int = 42,
 ) -> BenchmarkResponse:
     cases = load_cases(cases_path)
     details: dict[str, list[ModelResult]] = {
         f"{mode}::{model}": []
         for mode in retrieval_modes
         for model in models
+    }
+    successful_case_ids: dict[str, set[str]] = {
+        key: set()
+        for key in details
     }
     retrieval_stats = {
         mode: {
@@ -77,7 +119,11 @@ async def run_benchmark(
             "recall_5": [],
             "mrr": [],
             "latency_ms": [],
+            "cold_latency_ms": [],
+            "warm_latency_ms": [],
             "embedding_ms": [],
+            "cold_embedding_ms": [],
+            "warm_embedding_ms": [],
         }
         for mode in retrieval_modes
     }
@@ -88,92 +134,132 @@ async def run_benchmark(
         model_count=len(models),
         retrieval_mode_count=len(retrieval_modes),
         top_k=top_k,
+        repetitions=repetitions,
+        order_seed=order_seed,
     ):
-        for case in cases:
+        for case_index, case in enumerate(cases):
+            case_modes = _shuffled(
+                list(retrieval_modes),
+                order_seed + case_index,
+            )
             with traced("benchmark.case", case_id=case.id):
-                for mode in retrieval_modes:
+                for mode_index, mode in enumerate(case_modes):
                     ranking_k = max(top_k, 5)
-                    try:
-                        ranked, retrieval_trace = await retriever.retrieve(
-                            database_path,
-                            case.question,
+                    quality_recorded = False
+
+                    for repetition in range(repetitions):
+                        cache_state = "cold" if repetition == 0 else "warm"
+                        if repetition == 0 and mode in {"embedding", "hybrid"}:
+                            retriever.clear_embedding_cache(embedding_model)
+
+                        with traced(
+                            "benchmark.retrieval",
+                            case_id=case.id,
                             mode=mode,
-                            limit=ranking_k,
-                            embedding_model=embedding_model,
-                        )
-                    except RuntimeError as exc:
-                        for model in models:
-                            details[f"{mode}::{model}"].append(
-                                ModelResult(
-                                    model=model,
-                                    ok=False,
-                                    question=case.question,
-                                    error=(
-                                        f"Falha no retrieval {mode}: {exc}"
-                                    ),
+                            repetition=repetition + 1,
+                            cache_state=cache_state,
+                        ):
+                            try:
+                                ranked, retrieval_trace = await retriever.retrieve(
+                                    database_path,
+                                    case.question,
+                                    mode=mode,
+                                    limit=ranking_k,
+                                    embedding_model=embedding_model,
                                 )
+                            except RuntimeError as exc:
+                                for model in models:
+                                    details[f"{mode}::{model}"].append(
+                                        ModelResult(
+                                            model=model,
+                                            ok=False,
+                                            question=case.question,
+                                            benchmark_case_id=case.id,
+                                            benchmark_repetition=repetition + 1,
+                                            error=(
+                                                f"Falha no retrieval {mode}: {exc}"
+                                            ),
+                                        )
+                                    )
+                                continue
+
+                        ranked_ids = [document.id for document in ranked]
+                        stats = retrieval_stats[mode]
+                        stats["latency_ms"].append(retrieval_trace.latency_ms)
+                        stats["embedding_ms"].append(retrieval_trace.embedding_ms)
+                        if repetition == 0:
+                            stats["cold_latency_ms"].append(
+                                retrieval_trace.latency_ms
                             )
-                        continue
+                            stats["cold_embedding_ms"].append(
+                                retrieval_trace.embedding_ms
+                            )
+                        else:
+                            stats["warm_latency_ms"].append(
+                                retrieval_trace.latency_ms
+                            )
+                            stats["warm_embedding_ms"].append(
+                                retrieval_trace.embedding_ms
+                            )
 
-                    ranked_ids = [
-                        document.id
-                        for document in ranked
-                    ]
-                    stats = retrieval_stats[mode]
-                    stats["latency_ms"].append(
-                        retrieval_trace.latency_ms
-                    )
-                    stats["embedding_ms"].append(
-                        retrieval_trace.embedding_ms
-                    )
+                        expected_ids = set(case.expected_document_ids)
+                        if expected_ids and not quality_recorded:
+                            stats["recall_1"].append(
+                                _recall_at_k(expected_ids, ranked_ids, 1)
+                            )
+                            stats["recall_3"].append(
+                                _recall_at_k(expected_ids, ranked_ids, 3)
+                            )
+                            stats["recall_5"].append(
+                                _recall_at_k(expected_ids, ranked_ids, 5)
+                            )
+                            stats["mrr"].append(
+                                _reciprocal_rank(expected_ids, ranked_ids)
+                            )
+                            quality_recorded = True
 
-                    expected_ids = set(case.expected_document_ids)
-                    if expected_ids:
-                        stats["recall_1"].append(
-                            _recall_at_k(expected_ids, ranked_ids, 1)
-                        )
-                        stats["recall_3"].append(
-                            _recall_at_k(expected_ids, ranked_ids, 3)
-                        )
-                        stats["recall_5"].append(
-                            _recall_at_k(expected_ids, ranked_ids, 5)
-                        )
-                        stats["mrr"].append(
-                            _reciprocal_rank(expected_ids, ranked_ids)
+                        generation_documents = ranked[:top_k]
+                        generation_trace = RetrievalTrace(
+                            mode=retrieval_trace.mode,
+                            latency_ms=retrieval_trace.latency_ms,
+                            embedding_ms=retrieval_trace.embedding_ms,
+                            ranked_document_ids=ranked_ids,
+                            ranked_scores=[document.score for document in ranked],
                         )
 
-                    generation_documents = ranked[:top_k]
-                    generation_trace = RetrievalTrace(
-                        mode=retrieval_trace.mode,
-                        latency_ms=retrieval_trace.latency_ms,
-                        embedding_ms=retrieval_trace.embedding_ms,
-                        ranked_document_ids=ranked_ids,
-                        ranked_scores=[
-                            document.score
-                            for document in ranked
-                        ],
-                    )
-
-                    for model in models:
-                        result = await client.run_grounded_query(
-                            model,
-                            case.question,
-                            generation_documents,
-                            retrieval=generation_trace,
+                        model_seed = (
+                            order_seed
+                            + case_index * 10_000
+                            + mode_index * 1_000
+                            + repetition
                         )
-                        if result.ok and result.answer:
-                            result.evaluation = evaluate_query(
-                                case,
-                                result.answer,
+                        model_order = _shuffled(list(models), model_seed)
+                        for model in model_order:
+                            result = await client.run_grounded_query(
+                                model,
+                                case.question,
                                 generation_documents,
+                                retrieval=generation_trace,
                             )
-                        details[f"{mode}::{model}"].append(result)
+                            result.benchmark_case_id = case.id
+                            result.benchmark_repetition = repetition + 1
+                            if result.ok and result.answer:
+                                result.evaluation = evaluate_query(
+                                    case,
+                                    result.answer,
+                                    generation_documents,
+                                )
+                                successful_case_ids[f"{mode}::{model}"].add(
+                                    case.id
+                                )
+                            details[f"{mode}::{model}"].append(result)
 
     rows: list[BenchmarkRow] = []
     for mode in retrieval_modes:
         mode_stats = retrieval_stats[mode]
         for model in models:
-            results = details[f"{mode}::{model}"]
+            key = f"{mode}::{model}"
+            results = details[key]
             successful = [
                 result
                 for result in results
@@ -208,6 +294,11 @@ async def run_benchmark(
             else:
                 cpu_only_all_runs = all(bool(value) for value in cpu_values)
 
+            llm_latencies = [
+                result.metrics.total_ms
+                for result in successful
+                if result.metrics
+            ]
             rows.append(
                 BenchmarkRow(
                     model=model,
@@ -217,14 +308,14 @@ async def run_benchmark(
                         if mode in {"embedding", "hybrid"}
                         else None
                     ),
-                    cases=len(results),
-                    successful_cases=len(successful),
+                    repetitions=repetitions,
+                    cases=len(cases),
+                    successful_cases=len(successful_case_ids[key]),
+                    executions=len(results),
+                    successful_executions=len(successful),
                     avg_factual_score=(
                         round(
-                            sum(
-                                item.factual_score
-                                for item in evaluations
-                            )
+                            sum(item.factual_score for item in evaluations)
                             / len(evaluations),
                             2,
                         )
@@ -249,32 +340,33 @@ async def run_benchmark(
                         [bool(value) for value in source_values]
                     ),
                     hallucination_free_rate=_rate(
-                        [
-                            item.hallucination_free
-                            for item in evaluations
-                        ]
+                        [item.hallucination_free for item in evaluations]
                     ),
                     abstention_accuracy=_rate(
                         [bool(value) for value in abstention_values]
                     ),
-                    avg_retrieval_ms=_average(
-                        mode_stats["latency_ms"]
+                    avg_retrieval_ms=_average(mode_stats["latency_ms"]),
+                    median_retrieval_ms=_median(mode_stats["latency_ms"]),
+                    p95_retrieval_ms=_percentile(
+                        mode_stats["latency_ms"],
+                        95,
                     ),
-                    avg_embedding_ms=_average(
-                        mode_stats["embedding_ms"]
+                    avg_cold_retrieval_ms=_average(
+                        mode_stats["cold_latency_ms"]
                     ),
-                    avg_total_ms=(
-                        round(
-                            sum(
-                                result.metrics.total_ms
-                                for result in successful
-                            )
-                            / len(successful),
-                            2,
-                        )
-                        if successful
-                        else 0.0
+                    avg_warm_retrieval_ms=_average(
+                        mode_stats["warm_latency_ms"]
                     ),
+                    avg_embedding_ms=_average(mode_stats["embedding_ms"]),
+                    avg_cold_embedding_ms=_average(
+                        mode_stats["cold_embedding_ms"]
+                    ),
+                    avg_warm_embedding_ms=_average(
+                        mode_stats["warm_embedding_ms"]
+                    ),
+                    avg_total_ms=_average(llm_latencies),
+                    median_total_ms=_median(llm_latencies),
+                    p95_total_ms=_percentile(llm_latencies, 95),
                     avg_tokens_per_second=(
                         round(
                             sum(
@@ -305,6 +397,11 @@ async def run_benchmark(
         "retrieval_modes": retrieval_modes,
         "embedding_model": embedding_model,
         "benchmark_cases": len(cases),
+        "repetitions": repetitions,
+        "order_seed": order_seed,
+        "planned_llm_executions": (
+            len(cases) * len(retrieval_modes) * len(models) * repetitions
+        ),
     }
 
     return BenchmarkResponse(
